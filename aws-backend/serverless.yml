@@ -1,0 +1,178 @@
+# NOTE: update this with your service name
+service: backend-api
+
+# Create an optimized package for our functions
+package:
+  individually: true
+
+plugins:
+  - serverless-bundle # Package our functions with Webpack
+  - serverless-offline
+  - ./plugins/offline-invalidate.js
+  - serverless-dotenv-plugin # Load .env as environment variables
+  - serverless-pseudo-parameters
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  stage: dev
+  region: eu-west-1
+  # To load environment variables externally
+  # rename env.example to .env and uncomment
+  # the following line. Also, make sure to not
+  # commit your .env.
+  #
+  environment:
+    STAGE: ${self:custom.stage}
+    GEOCODE_API_KEY: ${env:GEOCODE_API_KEY}
+    GEOCODE_ENDPOINT: ${env:GEOCODE_ENDPOINT}
+    GEOCODE_REGION: ${env:GEOCODE_REGION}
+    COMPANIES_TABLE_NAME: ${self:custom.stage}-companies
+    USERS_TABLE_NAME: ${self:custom.stage}-users
+    COUPONS_TABLE_NAME: ${self:custom.stage}-coupons
+    STRIPE_CONNECT_URL: ${env:STRIPE_CONNECT_URL}
+    APPLICATION_URL: ${env:APPLICATION_URL}
+    WEBFRONTEND_URL: ${env:WEBFRONTEND_URL}
+    SEND_COUPON_EMAIL: ${env:COUPON_EMAIL}
+    STRIPE_CHECKOUT_REDIRECT_SUCCESS: ${env:STRIPE_CHECKOUT_REDIRECT_SUCCESS}
+    STRIPE_CHECKOUT_REDIRECT_CANCEL: ${env:STRIPE_CHECKOUT_REDIRECT_CANCEL}
+
+  # 'iamRoleStatements' defines the permission policy for the Lambda function.
+  # In this case Lambda functions are granted with permissions to access DynamoDB.
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+      Resource: 'arn:aws:dynamodb:eu-west-1:*:*'
+
+custom:
+  stage: ${opt:stage, self:provider.stage}
+
+functions:
+  # Defines an HTTP API endpoint that calls the main function in address/get.js
+  # - path: url path is /address/{postalCode}/{houseNumber}
+  # - method: GET request
+  addressGet:
+    handler: address/get.main
+    events:
+      - http:
+          path: address/{postalCode}/{houseNumber}
+          method: get
+          cors: true
+  companyGet:
+    handler: company/get.main
+    events:
+      - http:
+          path: company/{id}
+          method: get
+  companiesGet:
+    handler: company/getAll.main
+    events:
+      - http:
+          path: companies
+          method: get
+          cors: true
+  companyCreate:
+    role: readAndWriteToDynamoDbWithoutSecret
+    handler: company/create.main
+
+  companyUpdate:
+    role: readAndWriteToDynamoDbWithoutSecret
+    handler: company/update.main
+    events:
+      - http:
+          path: company/{id}
+          method: put
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: apiGatewayAuthorizer
+
+  companyDelete:
+    role: readAndWriteToDynamoDbWithoutSecret
+    handler: company/delete.main
+    events:
+      - http:
+          path: company/{id}
+          method: delete
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: apiGatewayAuthorizer
+
+  testCognito:
+    handler: handler.test1
+    events:
+      - http:
+          path: test1
+          method: get
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: apiGatewayAuthorizer
+
+  preSignupLambdaFunction:
+    role: readAndWriteToDynamoDbWithoutSecret
+    handler: cognito/autoConfirmUser.main
+
+  stripeConnectCallback:
+    role: readAndWriteToDynamoDbWithSecretAndEmail
+    handler: stripe/connectCallback.main
+    events:
+      - http:
+          path: stripe/connect/callback
+          method: get
+
+  stripeConnect:
+    role: readAndWriteToDynamoDbWithSecretAndEmail
+    handler: stripe/connect.main
+    events:
+      - http:
+          path: stripe/connect
+          method: get
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: apiGatewayAuthorizer
+
+  stripeCheckoutSession:
+    role: readAndWriteToDynamoDbWithSecretAndEmail
+    handler: stripe/createCheckoutSession.main
+    events:
+      - http:
+          path: stripe/checkout-session
+          method: get
+
+  stripeCheckoutCompleted:
+    role: readAndWriteToDynamoDbWithSecretAndEmail
+    handler: stripe/checkoutCompleted.main
+    events:
+      - http:
+          path: stripe/checkout-completed
+          method: post
+
+  stripeApplicationAccountDeauthorized:
+    role: readAndWriteToDynamoDbWithSecretAndEmail
+    handler: stripe/accountApplicationDeauthorized.main
+    events:
+      - http:
+          path: stripe/account-application-deauthorized
+          method: post
+
+  # For quick testing only
+  # sendCouponEmail:
+  #   handler: email/send-coupon.lambda.main
+  #   events:
+  #     - http:
+  #         path: coupon
+  #         method: get
+
+resources:
+  - ${file(resources/cognito.yml)}
+  - ${file(resources/roles.yml)}

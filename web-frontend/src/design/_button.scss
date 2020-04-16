@@ -1,0 +1,11 @@
+button:focus {
+  outline: 0 !important;
+}
+
+.big-red-button {
+  width: fit-content;
+
+  &:focus {
+    border-color: $secondary;
+  }
+}

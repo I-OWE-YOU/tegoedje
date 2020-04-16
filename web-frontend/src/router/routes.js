@@ -1,0 +1,16 @@
+export const routes = {
+  home: '/',
+  signup: '/signup',
+  signin: '/signin',
+  about: '/about',
+  entrepreneur: '/entrepreneur',
+  entrepreneurFinish: '/entrepreneur/finish',
+  letMeHelp: '/let-me-help',
+  coupons: '/coupons',
+  couponConfirm: '/coupons-confirm',
+  termsAndConditions: '/algemene-voorwaarden',
+  customer: '/customer',
+  privacyStatement: '/privacyverklaring',
+  successfulPayment: '/successful-payment',
+  canceledPayment: '/canceled-payment',
+}
